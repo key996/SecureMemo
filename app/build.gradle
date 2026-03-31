@@ -31,7 +31,6 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // 禁用不需要的功能，减小包体积
     packagingOptions {
         exclude 'META-INF/DEPENDENCIES'
         exclude 'META-INF/LICENSE'
@@ -40,15 +39,9 @@ android {
 }
 
 dependencies {
-    // AndroidX 核心库（API 26+ 兼容）
     implementation 'androidx.appcompat:appcompat:1.4.2'
     implementation 'com.google.android.material:material:1.6.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
-
-    // JSON 处理（使用 Android 内置 org.json，无需额外依赖）
-    // AES 加密使用 Android 内置 javax.crypto，无需额外依赖
-
-    // OkHttp 用于 WebDAV 网络请求（无 Google 服务依赖）
     implementation 'com.squareup.okhttp3:okhttp:4.9.3'
 }
