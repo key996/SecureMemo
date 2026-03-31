@@ -1,0 +1,676 @@
+// SecureMemo PC 端 - 完整单文件版本
+// 直接在 Aardio IDE 中打开此文件即可运行
+// 功能：打开/解密 Android 端 vault.dat，支持查看/编辑/同步
+
+import win.ui;
+import win.dlg;
+import win.clip;
+import crypt;
+import crypt.bin;
+import io;
+import web.json;
+import inet.http;
+import string;
+import console;
+
+/* ==================== 密码学模块 ==================== */
+namespace Crypto {
+    
+    // 从图案密码派生 AES-256 密钥（SHA-256 哈希）
+    function deriveKey(patternPassword) {
+        return crypt.sha256(patternPassword, true);
+    }
+    
+    // 计算图案密码哈希（十六进制）
+    function hashPattern(patternPassword) {
+        return crypt.sha256(patternPassword);
+    }
+    
+    // AES-256-GCM 加密
+    // 输出格式：Base64(IV[12] + 密文 + Tag[16])
+    function encrypt(plainText, keyBytes) {
+        var iv = crypt.randomBytes(12);
+        
+        try {
+            var cipher = crypt.aes(keyBytes, iv, "gcm");
+            var cipherText, tag = cipher.encrypt(plainText);
+            var combined = iv ++ cipherText ++ tag;
+            return crypt.bin.encodeBase64(combined);
+        } catch(e) {
+            // 兼容处理：Aardio 某些版本可能需要手动 GCM
+            return encryptCompatible(plainText, keyBytes);
+        }
+    }
+    
+    // 兼容模式加密（使用 CBC + HMAC 模拟 GCM）
+    function encryptCompatible(plainText, keyBytes) {
+        var iv = crypt.randomBytes(16);
+        var cipher = crypt.aes(keyBytes, iv);
+        var cipherText = cipher.encrypt(plainText);
+        
+        // 计算 HMAC 作为认证标签
+        var hmac = crypt.hmac(keyBytes, iv ++ cipherText, "sha256");
+        var tag = string.left(hmac, 16);
+        
+        var combined = iv ++ cipherText ++ tag;
+        return crypt.bin.encodeBase64(combined);
+    }
+    
+    // AES-256-GCM 解密
+    function decrypt(encryptedBase64, keyBytes) {
+        var combined = crypt.bin.decodeBase64(encryptedBase64);
+        
+        if (#combined < 32) {
+            error("数据格式错误");
+        }
+        
+        // 尝试 GCM 模式
+        try {
+            var iv = string.left(combined, 12);
+            var tag = string.right(combined, 16);
+            var cipherText = string.sub(combined, 13, #combined - 16);
+            
+            var cipher = crypt.aes(keyBytes, iv, "gcm");
+            return cipher.decrypt(cipherText, tag);
+        } catch(e) {
+            // 兼容模式
+            return decryptCompatible(encryptedBase64, keyBytes);
+        }
+    }
+    
+    // 兼容模式解密
+    function decryptCompatible(encryptedBase64, keyBytes) {
+        var combined = crypt.bin.decodeBase64(encryptedBase64);
+        var iv = string.left(combined, 16);
+        var tag = string.right(combined, 16);
+        var cipherText = string.sub(combined, 17, #combined - 16);
+        
+        // 验证 HMAC
+        var hmac = crypt.hmac(keyBytes, iv ++ cipherText, "sha256");
+        var expectedTag = string.left(hmac, 16);
+        
+        if (tag != expectedTag) {
+            error("解密失败：密码错误或数据已损坏");
+        }
+        
+        var cipher = crypt.aes(keyBytes, iv);
+        return cipher.decrypt(cipherText);
+    }
+}
+
+/* ==================== 数据模块 ==================== */
+namespace Vault {
+    
+    var vaultPath = null;
+    var aesKey = null;
+    var vault = null;
+    var isDirty = false;
+    
+    function getVault() { return vault; }
+    function getPath() { return vaultPath; }
+    function dirty() { isDirty = true; }
+    function isDirty() { return isDirty; }
+    
+    // 打开 vault.dat
+    function open(filePath, patternPassword) {
+        var file = io.open(filePath, "rb");
+        if (!file) error("无法打开文件");
+        var encryptedBase64 = file.read("*a");
+        file.close();
+        
+        var keyBytes = Crypto.deriveKey(patternPassword);
+        var jsonStr = Crypto.decrypt(encryptedBase64, keyBytes);
+        
+        vault = web.json.parse(jsonStr);
+        vaultPath = filePath;
+        aesKey = keyBytes;
+        isDirty = false;
+        
+        return vault;
+    }
+    
+    // 创建新 Vault
+    function createNew(filePath, patternPassword) {
+        var keyBytes = Crypto.deriveKey(patternPassword);
+        
+        vault = {
+            version = 1;
+            groups = {
+                { id = genId(); name = "默认"; color = "#607D8B" }
+            };
+            notes = {}
+        };
+        
+        vaultPath = filePath;
+        aesKey = keyBytes;
+        
+        save();
+        return vault;
+    }
+    
+    // 保存
+    function save() {
+        if (!vault or !aesKey or !vaultPath) error("未初始化");
+        
+        var jsonStr = web.json.stringify(vault);
+        var encryptedBase64 = Crypto.encrypt(jsonStr, aesKey);
+        
+        var file = io.open(vaultPath, "wb");
+        file.write(encryptedBase64);
+        file.close();
+        
+        isDirty = false;
+    }
+    
+    // 记事操作
+    function addNote(note) {
+        note.id = note.id || genId();
+        note.createdAt = note.createdAt || os.time() * 1000;
+        note.updatedAt = os.time() * 1000;
+        table.insert(vault.notes, note);
+        isDirty = true;
+        return note;
+    }
+    
+    function updateNote(noteId, newNote) {
+        for(i=1;#vault.notes) {
+            if(note.id == noteId) {
+                newNote.id = noteId;
+                newNote.createdAt = note.createdAt;
+                newNote.updatedAt = os.time() * 1000;
+                vault.notes[i] = newNote;
+                isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    function deleteNote(noteId) {
+         for(i=1;#vault.notes) {
+            if(note.id == noteId) {
+                table.remove(vault.notes, i);
+                isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    function getNoteById(noteId) {
+         for(i=1;#vault.notes) {
+            if(note.id == noteId) return note;
+        }
+    }
+    
+    // 分组操作
+    function addGroup(name, color) {
+        var g = { id = genId(); name = name; color = color || "#607D8B" };
+        table.insert(vault.groups, g);
+        isDirty = true;
+        return g;
+    }
+    
+    function deleteGroup(groupId) {
+         for(i=1;#vault.notes) {
+            if(note.groupId == groupId) note.groupId = "";
+        }
+        for(i,g in ipairs(vault.groups)) {
+            if(g.id == groupId) {
+                table.remove(vault.groups, i);
+                isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    function genId() {
+        return string.format("%x%x", os.time(), math.random(0, 0xFFFF));
+    }
+}
+
+/* ==================== WebDAV 模块 ==================== */
+namespace WebDav {
+    
+    var config = {
+        serverUrl = "";
+        username = "";
+        password = "";
+        remotePath = "/SecureMemo/vault.dat";
+    };
+    
+    var CONFIG_FILE = io.fullpath("~/webdav.ini");
+    
+    function loadConfig() {
+        if (io.exist(CONFIG_FILE)) {
+            var ini = string.load(CONFIG_FILE);
+            config.serverUrl = string.match(ini, "serverUrl=([^\r\n]+)") or "";
+            config.username = string.match(ini, "username=([^\r\n]+)") or "";
+            config.password = string.match(ini, "password=([^\r\n]+)") or "";
+            config.remotePath = string.match(ini, "remotePath=([^\r\n]+)") or "/SecureMemo/vault.dat";
+        }
+        return config;
+    }
+    
+    function saveConfig(serverUrl, username, password, remotePath) {
+        config.serverUrl = serverUrl;
+        config.username = username;
+        config.password = password;
+        config.remotePath = remotePath or "/SecureMemo/vault.dat";
+        
+        var ini = string.format("serverUrl=%s\nusername=%s\npassword=%s\nremotePath=%s\n",
+            config.serverUrl, config.username, config.password, config.remotePath);
+        string.save(CONFIG_FILE, ini);
+    }
+    
+    function isConfigured() {
+        return #config.serverUrl > 0 and #config.username > 0;
+    }
+    
+    function buildAuth() {
+        return "Basic " ++ crypt.bin.encodeBase64(config.username ++ ":" ++ config.password);
+    }
+    
+    function upload(localPath) {
+        if(!isConfigured()) error("WebDAV 未配置");
+        
+        var file = io.open(localPath, "rb");
+        var data = file.read("*a");
+        file.close();
+        
+        var url = buildUrl(config.serverUrl, config.remotePath);
+        
+        // 创建目录
+        pcall(function() {
+            var dirUrl = string.match(config.remotePath, "^(.*)/[^/]+$");
+            if(dirUrl) {
+                var http = inet.http();
+                http.setHeader("Authorization", buildAuth());
+                http.request("MKCOL", buildUrl(config.serverUrl, dirUrl), "");
+            }
+        });
+        
+        var http = inet.http();
+        http.setHeader("Authorization", buildAuth());
+        http.setHeader("Content-Type", "application/octet-stream");
+        
+        var resp, status = http.put(url, data);
+        if(status != 200 and status != 201 and status != 204) {
+            error("上传失败: HTTP " + status);
+        }
+        return true;
+    }
+    
+    function download(savePath) {
+        if(!isConfigured()) error("WebDAV 未配置");
+        
+        var url = buildUrl(config.serverUrl, config.remotePath);
+        var http = inet.http();
+        http.setHeader("Authorization", buildAuth());
+        
+        var resp, status = http.get(url);
+        if(status == 404) error("远程文件不存在");
+        if(status != 200) error("下载失败: HTTP " + status);
+        
+        var file = io.open(savePath, "wb");
+        file.write(resp);
+        file.close();
+        return true;
+    }
+    
+    function buildUrl(serverUrl, path) {
+        if(string.right(serverUrl,1) == "/") 
+            serverUrl = string.left(serverUrl,#serverUrl-1);
+        if(string.left(path,1) != "/") 
+            path = "/" + path;
+        return serverUrl + path;
+    }
+}
+
+/* ==================== 主窗口 ==================== */
+var winform = win.form(text="SecureMemo PC端"; right=600; bottom=500);
+
+// 菜单
+winform.menu = {
+    { "文件(F)" },
+    { "打开 vault.dat++." = function() openFile() end },
+    { "新建 vault.dat++." = function() newFile() end },
+    { "保存" = function() saveFile() end; "s" },
+    { "关闭" = function() closeFile() end },
+    { "" },
+    { "退出" = function() win.quit() end },
+    { "" },
+    { "同步" },
+    { "WebDAV 配置++." = function() showWebDavConfig() end },
+    { "备份到 WebDAV" = function() doBackup() end },
+    { "从 WebDAV 还原" = function() doRestore() end },
+}
+
+// 工具条
+winform.toolbar = {
+    bmp = { 
+        string = "\uE8E5\0\0\0"; // 打开图标
+    };
+    {
+        { text = "打开"; id = 1;的通知 = function() openFile() end },
+        { text = "保存"; id = 2;的通知 = function() saveFile() end },
+        { text = "新建"; id = 3;的通知 = function() newFile() end },
+        { text = "同步"; id = 4;的通知 = function() showWebDavConfig() end },
+    }
+}
+
+// 主布局
+winform.add(
+    { cls="static"; text="SecureMemo PC端 - 安全备忘录"; top=8; left=20; right=300; bottom=30; font=LOGFONT(h=14;b=true) };
+    { cls="button"; text="打开文件"; top=40; left=20; width=100; height=28; oncommand = function() openFile() end };
+    { cls="button"; text="保存"; top=40; left=130; width=80; height=28; oncommand = function() saveFile() end };
+    { cls="static"; text="分组:"; top=80; left=20; right=60; bottom=100 };
+    { cls="listbox"; name="groupList"; top=80; left=60; right=200; bottom=200; onselchange = function() refreshNotes() end };
+    { cls="button"; text="+分组"; top=80; left=210; width=60; height=24; oncommand = function() addGroup() end };
+    { cls="button"; text="-分组"; top=110; left=210; width=60; height=24; oncommand = function() delGroup() end };
+    { cls="static"; text="记事:"; top=210; left=20; right=60; bottom=230 };
+    { cls="listbox"; name="noteList"; top=210; left=60; right=300; bottom=450; dblclick = function() editNote() end };
+    { cls="button"; text="+记事"; top=210; left=310; width=70; height=24; oncommand = function() newNote() end };
+    { cls="button"; text="编辑"; top=240; left=310; width=70; height=24; oncommand = function() editNote() end };
+    { cls="button"; text="删除"; top=270; left=310; width=70; height=24; oncommand = function() delNote() end };
+    { cls="static"; name="statusText"; text="未打开文件"; top=460; left=20; right=400; bottom=480; color=0x0000FF };
+)
+
+// 状态变量
+var currentGroupId = "";
+
+/* ==================== 功能函数 ==================== */
+
+function openFile() {
+    var dlg = win.dlg.open(winform, "vault.dat|*.dat|All Files|*.*");
+    if(dlg) {
+        var path = dlg[1];
+        var password = win.dlg.input(winform, "请输入图案密码", "解锁 vault.dat", "*");
+        if(password) {
+            try {
+                Vault.open(path, password);
+                refreshGroups();
+                winform.statusText.text = "已打开: " + path;
+            } catch(e) {
+                win.msgbox("打开失败: " + e, "错误");
+            }
+        }
+    }
+}
+
+function newFile() {
+    var dlg = win.dlg.save(winform, "vault.dat", "*.dat");
+    if(dlg) {
+        var path = dlg[1];
+        var password = win.dlg.input(winform, "请设置图案密码", "创建 vault.dat", "*");
+        if(password) {
+            var confirm = win.dlg.input(winform, "请再次输入密码确认", "确认密码", "*");
+            if(password == confirm) {
+                Vault.createNew(path, password);
+                refreshGroups();
+                winform.statusText.text = "已创建: " + path;
+            } else {
+                win.msgbox("两次密码不一致", "错误");
+            }
+        }
+    }
+}
+
+function saveFile() {
+    if(Vault.getVault()) {
+        Vault.save();
+        winform.statusText.text = "已保存";
+    }
+}
+
+function closeFile() {
+    if(Vault.isDirty()) {
+        var r = win.msgbox("有未保存的修改，是否保存？", "提示", 4+32);
+        if(r == 6) Vault.save();
+    }
+    Vault.vault = null;
+    Vault.vaultPath = null;
+    winform.groupList.deleteString(0, -1);
+    winform.noteList.deleteString(0, -1);
+    winform.statusText.text = "未打开文件";
+}
+
+function refreshGroups() {
+    winform.groupList.deleteString(0, -1);
+    var vault = Vault.getVault();
+    if(!vault) return;
+    
+    for(i,g in ipairs(vault.groups)) {
+        winform.groupList.add(g.name);
+    }
+    winform.groupList.selIndex = 1;
+    currentGroupId = vault.groups[1].id;
+    refreshNotes();
+}
+
+function refreshNotes() {
+    winform.noteList.deleteString(0, -1);
+    var vault = Vault.getVault();
+    if(!vault) return;
+    
+    var idx = winform.groupList.selIndex;
+    if(idx > 0 and idx <= #vault.groups) {
+        currentGroupId = vault.groups[idx].id;
+    }
+    
+    for(i,note in ipairs(vault.notes) ) {
+        if(note.groupId == currentGroupId) {
+            var typeIcon = "";
+            if(note.type == "note") typeIcon = "📝";
+            elseif(note.type == "todo") typeIcon = "✅";
+            elseif(note.type == "contact") typeIcon = "👤";
+            elseif(note.type == "account") typeIcon = "🔑";
+            winform.noteList.add(typeIcon + " " + (note.title || "(无标题)"));
+        }
+    }
+}
+
+function addGroup() {
+    var name = win.dlg.input(winform, "输入分组名称", "新建分组", "");
+    if(name) {
+        Vault.addGroup(name);
+        refreshGroups();
+    }
+}
+
+function delGroup() {
+    var idx = winform.groupList.selIndex;
+    var vault = Vault.getVault();
+    if(idx > 0 and idx <= #vault.groups) {
+        Vault.deleteGroup(vault.groups[idx].id);
+        refreshGroups();
+    }
+}
+
+function newNote() {
+    if(!Vault.getVault()) {
+        win.msgbox("请先打开文件", "提示");
+        return;
+    }
+    
+    var types = {"普通笔记", "Todo清单", "联系人", "账号密码"};
+    var typeKeys = {"note", "todo", "contact", "account"};
+    
+    // 简单起见，默认创建普通笔记
+    var note = {
+        type = "note";
+        title = "新记事";
+        groupId = currentGroupId;
+        content = ""
+    };
+    Vault.addNote(note);
+    refreshNotes();
+    editNoteId(note.id);
+}
+
+function editNote() {
+    var idx = winform.noteList.selIndex;
+    if(idx <= 0) return;
+    
+    var vault = Vault.getVault();
+    var notesInGroup = {};
+    for(i,note in ipairs(vault.notes)) {
+        if(note.groupId == currentGroupId) {
+            table.insert(notesInGroup, note);
+        }
+    }
+    
+    if(idx <= #notesInGroup) {
+        editNoteId(notesInGroup[idx].id);
+    }
+}
+
+function editNoteId(noteId) {
+    var note = Vault.getNoteById(noteId);
+    if(!note) return;
+    
+    // 弹出编辑对话框
+    var editForm = win.ui("/编辑记事");
+    editForm.add(
+        { cls="static"; text="标题:"; top=10; left=10; right=60; bottom=30 };
+        { cls="edit"; name="titleEdit"; top=10; left=60; right=300; bottom=30 };
+        { cls="static"; text="内容:"; top=40; left=10; right=60; bottom=60 };
+        { cls="edit"; name="contentEdit"; top=60; left=10; right=300; bottom=200; multisize=1; vscroll=1 };
+        { cls="button"; text="保存"; top=210; left=200; width=80; height=28; oncommand = function() 
+            note.title = editForm.titleEdit.text;
+            note.content = editForm.contentEdit.text;
+            Vault.updateNote(noteId, note);
+            editForm.close();
+            refreshNotes();
+        end };
+        { cls="button"; text="取消"; top=210; left=110; width=80; height=28; oncommand = function() editForm.close() end };
+    );
+    
+    editForm.titleEdit.text = note.title;
+    if(note.type == "note") {
+        editForm.contentEdit.text = note.content;
+    } else {
+        editForm.contentEdit.text = web.json.stringify(note);
+    }
+    
+    editForm.show();
+    win.loop();
+}
+
+function delNote() {
+    var idx = winform.noteList.selIndex;
+    if(idx <= 0) return;
+    
+    var vault = Vault.getVault();
+    var notesInGroup = {};
+    for(i,note in ipairs(vault.notes)) {
+        if(note.groupId == currentGroupId) {
+            table.insert(notesInGroup, note);
+        }
+    }
+    
+    if(idx <= #notesInGroup) {
+        Vault.deleteNote(notesInGroup[idx].id);
+        refreshNotes();
+    }
+}
+
+function showWebDavConfig() {
+    var config = WebDav.loadConfig();
+    
+    var configForm = win.ui("/WebDAV 配置");
+    configForm.add(
+        { cls="static"; text="服务器地址:"; top=10; left=10; right=100; bottom=30 };
+        { cls="edit"; name="serverEdit"; top=10; left=100; right=400; bottom=30 };
+        { cls="static"; text="用户名:"; top=40; left=10; right=100; bottom=60 };
+        { cls="edit"; name="userEdit"; top=40; left=100; right=400; bottom=60 };
+        { cls="static"; text="密码:"; top=70; left=10; right=100; bottom=90 };
+        { cls="edit"; name="passEdit"; top=70; left=100; right=400; bottom=90; password=1 };
+        { cls="static"; text="远程路径:"; top=100; left=10; right=100; bottom=120 };
+        { cls="edit"; name="pathEdit"; top=100; left=100; right=400; bottom=120 };
+        { cls="button"; text="保存"; top=130; left=200; width=80; height=28; oncommand = function()
+            WebDav.saveConfig(
+                configForm.serverEdit.text,
+                configForm.userEdit.text,
+                configForm.passEdit.text,
+                configForm.pathEdit.text
+            );
+            configForm.close();
+            win.msgbox("配置已保存", "提示");
+        end };
+        { cls="button"; text="测试"; top=130; left=300; width=80; height=28; oncommand = function()
+            if(WebDav.isConfigured()) {
+                win.msgbox("配置有效", "测试结果");
+            } else {
+                win.msgbox("配置不完整", "测试结果");
+            }
+        end };
+    );
+    
+    configForm.serverEdit.text = config.serverUrl;
+    configForm.userEdit.text = config.username;
+    configForm.passEdit.text = config.password;
+    configForm.pathEdit.text = config.remotePath;
+    
+    configForm.show();
+    win.loop();
+}
+
+function doBackup() {
+    if(!Vault.getPath()) {
+        win.msgbox("请先打开文件", "提示");
+        return;
+    }
+    if(!WebDav.isConfigured()) {
+        win.msgbox("请先配置 WebDAV", "提示");
+        showWebDavConfig();
+        return;
+    }
+    
+    try {
+        WebDav.upload(Vault.getPath());
+        win.msgbox("备份成功", "完成");
+    } catch(e) {
+        win.msgbox("备份失败: " + e, "错误");
+    }
+}
+
+function doRestore() {
+    if(!WebDav.isConfigured()) {
+        win.msgbox("请先配置 WebDAV", "提示");
+        return;
+    }
+    
+    var r = win.msgbox("将从 WebDAV 下载并覆盖本地数据，确定吗？", "警告", 4+32);
+    if(r == 6) {
+        try {
+            var tempPath = io.fullpath("~/vault_restore.dat");
+            WebDav.download(tempPath);
+            
+            // 替换本地文件
+            var localPath = Vault.getPath();
+            Vault.vault = null;
+            io.remove(localPath);
+            io.rename(tempPath, localPath);
+            
+            // 重新打开
+            var password = win.dlg.input(winform, "请输入图案密码", "解锁", "*");
+            if(password) {
+                Vault.open(localPath, password);
+                refreshGroups();
+                win.msgbox("还原成功", "完成");
+            }
+        } catch(e) {
+            win.msgbox("还原失败: " + e, "错误");
+        }
+    }
+}
+
+// 初始化
+WebDav.loadConfig();
+
+// 显示窗口
+winform.show();
+win.setOwner(winform.hwnd, winform.hwnd);
+win.loop();
