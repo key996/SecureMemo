@@ -1,0 +1,29 @@
+// SecureMemo PC 端 - 主程序入口
+// 语言：Aardio
+// 功能：打开/解密 Android 端生成的 vault.dat，支持查看/编辑/同步
+
+import win.ui;
+import win.dlg;
+import string;
+import io;
+import crypt;
+import web.json;
+
+// 加载子模块
+import "crypto.aardio";
+import "vault.aardio";
+import "webdav.aardio";
+import "ui_main.aardio";
+
+// ==================== 全局状态 ====================
+namespace App {
+    var vaultPath = null;    // 当前打开的 vault.dat 路径
+    var aesKey = null;       // 当前会话的 AES 密钥（字节数组）
+    var vault = null;        // 解密后的 Vault 对象（table）
+    var isDirty = false;     // 是否有未保存的修改
+}
+
+// ==================== 启动入口 ====================
+var mainWin = UI.createMainWindow();
+mainWin.show();
+win.loopMessage();
