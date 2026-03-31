@@ -11,17 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+
+      - name: Install Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 7.5
 
       - name: Build APK
-        run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease -p app
+        run: gradle assembleRelease --no-daemon -p app
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
