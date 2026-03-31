@@ -16,15 +16,13 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Install Gradle
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip -O /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /opt
-          echo "/opt/gradle-7.5/bin" >> `$($env:GITHUB_PATH)
+      - name: Build with Gradle
+        run: gradle wrapper --gradle-version 7.5 -p app
 
       - name: Build APK
-        run: gradle assembleRelease --no-daemon -p app
+        run: ./app/gradlew assembleRelease -p app --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
