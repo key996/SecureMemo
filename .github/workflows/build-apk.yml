@@ -21,7 +21,7 @@ jobs:
       - name: Build APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -p app
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
