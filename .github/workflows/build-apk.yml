@@ -22,10 +22,19 @@ jobs:
         with:
           gradle-version: 7.5
 
+      - name: Show Gradle location
+        run: |
+          echo "Gradle home: ${{ env.GRADLE_HOME }}"
+          echo "Gradle user home: ${{ env.GRADLE_USER_HOME }}"
+          ls -la /home/runner/.gradle/wrapper/dists/gradle-7.5-bin/ 2>/dev/null || echo "Not found in home"
+          find /opt -name "gradle" -type f 2>/dev/null || echo "Not found in /opt"
+          which gradle 2>/dev/null || echo "gradle not in PATH"
+          export PATH="${{ env.GRADLE_HOME }}/bin:$PATH" && gradle --version
+
       - name: Build APK
         run: |
-          cd app
-          gradle assembleRelease --no-daemon --stacktrace
+          export PATH="${{ env.GRADLE_HOME }}/bin:$PATH"
+          gradle assembleRelease --no-daemon -p app
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
