@@ -144,11 +144,17 @@ public class WebDavSync {
         }
 
         InputStream is = conn.getInputStream();
-        byte[] data = is.readAllBytes();
+        // 兼容 API 26：使用 ByteArrayOutputStream 而不是 readAllBytes()
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        int nRead;
+        byte[] data = new byte[16384];
+        while ((nRead = is.read(data, 0, data.length)) != -1) {
+            buffer.write(data, 0, nRead);
+        }
         is.close();
         conn.disconnect();
 
-        return data;
+        return buffer.toByteArray();
     }
 
     // ==================== 工具方法 ====================
