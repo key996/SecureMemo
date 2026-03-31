@@ -1,0 +1,170 @@
+// vault.aardio - Vault 数据读写模块
+// 负责加密文件的读取、解析、修改和保存
+
+import io;
+import web.json;
+
+namespace Vault {
+
+    // ==================== 打开并解密 vault.dat ====================
+    function open(filePath, patternPassword) {
+        // 读取加密文件
+        var file = io.open(filePath, "rb");
+        if (!file) {
+            error("无法打开文件：" .. filePath);
+        }
+        var encryptedBase64 = file.read("*a");
+        file.close();
+
+        // 派生 AES 密钥
+        var keyBytes = Crypto.deriveKey(patternPassword);
+
+        // 解密
+        var jsonStr = Crypto.decrypt(encryptedBase64, keyBytes);
+
+        // 解析 JSON
+        var vault = web.json.parse(jsonStr);
+        if (!vault) {
+            error("数据解析失败，请检查密码是否正确");
+        }
+
+        // 保存到全局状态
+        App.vaultPath = filePath;
+        App.aesKey = keyBytes;
+        App.vault = vault;
+        App.isDirty = false;
+
+        return vault;
+    }
+
+    // ==================== 保存（加密写入） ====================
+    function save() {
+        if (!App.vault || !App.aesKey || !App.vaultPath) {
+            error("Vault 未初始化");
+        }
+
+        // 序列化为 JSON
+        App.vault.version = App.vault.version || 1;
+        var jsonStr = web.json.stringify(App.vault);
+
+        // 加密
+        var encryptedBase64 = Crypto.encrypt(jsonStr, App.aesKey);
+
+        // 写入文件
+        var file = io.open(App.vaultPath, "wb");
+        if (!file) {
+            error("无法写入文件：" .. App.vaultPath);
+        }
+        file.write(encryptedBase64);
+        file.close();
+
+        App.isDirty = false;
+    }
+
+    // ==================== 另存为（保存到新路径） ====================
+    function saveAs(newPath) {
+        App.vaultPath = newPath;
+        save();
+    }
+
+    // ==================== 创建新 Vault ====================
+    function createNew(filePath, patternPassword) {
+        var keyBytes = Crypto.deriveKey(patternPassword);
+
+        // 初始化空 Vault 结构
+        var vault = {
+            version = 1;
+            groups = {
+                { id = generateId(); name = "默认"; color = "#607D8B" }
+            };
+            notes = {};
+        };
+
+        App.vaultPath = filePath;
+        App.aesKey = keyBytes;
+        App.vault = vault;
+        App.isDirty = true;
+
+        save();
+        return vault;
+    }
+
+    // ==================== 记事 CRUD ====================
+
+    function addNote(note) {
+        note.id = note.id || generateId();
+        note.createdAt = note.createdAt || os.time() * 1000;
+        note.updatedAt = os.time() * 1000;
+        table.insert(App.vault.notes, note);
+        App.isDirty = true;
+        return note;
+    }
+
+    function updateNote(noteId, updatedNote) {
+        for (i, note in ipairs(App.vault.notes)) {
+            if (note.id == noteId) {
+                updatedNote.id = noteId;
+                updatedNote.createdAt = note.createdAt;
+                updatedNote.updatedAt = os.time() * 1000;
+                App.vault.notes[i] = updatedNote;
+                App.isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function deleteNote(noteId) {
+        for (i, note in ipairs(App.vault.notes)) {
+            if (note.id == noteId) {
+                table.remove(App.vault.notes, i);
+                App.isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getNoteById(noteId) {
+        for (i, note in ipairs(App.vault.notes)) {
+            if (note.id == noteId) return note;
+        }
+        return null;
+    }
+
+    // ==================== 分组 CRUD ====================
+
+    function addGroup(name, color) {
+        var group = {
+            id = generateId();
+            name = name;
+            color = color || "#607D8B";
+        };
+        table.insert(App.vault.groups, group);
+        App.isDirty = true;
+        return group;
+    }
+
+    function deleteGroup(groupId) {
+        // 删除分组，将该分组下的记事移到无分组
+        for (i, note in ipairs(App.vault.notes)) {
+            if (note.groupId == groupId) {
+                App.vault.notes[i].groupId = "";
+            }
+        }
+        for (i, group in ipairs(App.vault.groups)) {
+            if (group.id == groupId) {
+                table.remove(App.vault.groups, i);
+                App.isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ==================== 工具函数 ====================
+
+    function generateId() {
+        return string.format("%x%x", os.time(), math.random(0, 0xFFFF));
+    }
+}
