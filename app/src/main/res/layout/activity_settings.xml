@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置界面：WebDAV 配置 -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="WebDAV 服务器配置"
+            android:textSize="16sp" android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="服务器地址" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/etServer" android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="https://dav.jianguoyun.com/dav/"
+            android:inputType="textUri" android:layout_marginBottom="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="用户名" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/etUsername" android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="WebDAV 用户名（通常是邮箱）"
+            android:inputType="textEmailAddress" android:layout_marginBottom="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="密码 / 应用密码" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/etPassword" android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="WebDAV 密码或应用专用密码"
+            android:inputType="textPassword" android:layout_marginBottom="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="远程路径" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/etRemotePath" android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="/SecureMemo/vault.dat"
+            android:inputType="text" android:layout_marginBottom="16dp"/>
+
+        <Button android:id="@+id/btnSaveConfig"
+            android:layout_width="match_parent" android:layout_height="48dp"
+            android:text="保存配置"
+            android:backgroundTint="@color/primary"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="24dp"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider" android:layout_marginBottom="24dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="数据同步"
+            android:textSize="16sp" android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="备份：将本地加密数据上传到 WebDAV 服务器\n还原：从 WebDAV 下载数据覆盖本地（需重新解锁）"
+            android:textSize="13sp" android:textColor="@color/text_secondary"
+            android:layout_marginBottom="16dp"/>
+
+        <Button android:id="@+id/btnBackup"
+            android:layout_width="match_parent" android:layout_height="48dp"
+            android:text="☁️ 备份到 WebDAV"
+            android:backgroundTint="@color/accent"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="12dp"/>
+
+        <Button android:id="@+id/btnRestore"
+            android:layout_width="match_parent" android:layout_height="48dp"
+            android:text="⬇️ 从 WebDAV 还原"
+            android:backgroundTint="@color/warning"
+            android:textColor="@android:color/white"/>
+
+    </LinearLayout>
+</ScrollView>
