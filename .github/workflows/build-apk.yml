@@ -3,6 +3,7 @@ name: Build Release APK
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,16 +16,19 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant execute permission
-        run: chmod +x gradlew
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo "/opt/gradle-7.5/bin" >> `$($env:GITHUB_PATH)
 
       - name: Build APK
-        run: ./gradlew assembleRelease
+        run: gradle assembleRelease --no-daemon -p app
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: memo-app-apk
+          name: SecureMemo-APK
           path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
