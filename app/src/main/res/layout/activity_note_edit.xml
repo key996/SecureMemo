@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 记事编辑界面 -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 标题 -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="标题" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <EditText
+            android:id="@+id/etTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="请输入标题"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:inputType="text"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 分组选择 -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="分组" android:textColor="@color/text_secondary" android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+        <Spinner
+            android:id="@+id/spinnerGroup"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ===== 普通笔记字段 ===== -->
+        <LinearLayout
+            android:id="@+id/layoutNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="内容" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText
+                android:id="@+id/etContent"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:hint="请输入内容..."
+                android:gravity="top"
+                android:inputType="textMultiLine"
+                android:scrollbars="vertical"
+                android:layout_marginBottom="16dp" />
+        </LinearLayout>
+
+        <!-- ===== Todo 清单字段 ===== -->
+        <LinearLayout
+            android:id="@+id/layoutTodo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="待办事项" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:id="@+id/llTodoItems"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/btnAddTodoItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+ 添加子项"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:textColor="@color/primary"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="16dp" />
+        </LinearLayout>
+
+        <!-- ===== 联系人字段 ===== -->
+        <LinearLayout
+            android:id="@+id/layoutContact"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="姓名" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etName" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:hint="姓名"
+                android:inputType="textPersonName" android:layout_marginBottom="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="电话" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etPhone" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:hint="电话号码"
+                android:inputType="phone" android:layout_marginBottom="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="邮箱" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etEmail" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:hint="邮箱地址"
+                android:inputType="textEmailAddress" android:layout_marginBottom="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="备注" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etContactRemark" android:layout_width="match_parent"
+                android:layout_height="100dp" android:hint="备注信息"
+                android:gravity="top" android:inputType="textMultiLine"
+                android:layout_marginBottom="16dp"/>
+        </LinearLayout>
+
+        <!-- ===== 账号密码字段 ===== -->
+        <LinearLayout
+            android:id="@+id/layoutAccount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="用户名" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etUsername" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:hint="用户名 / 账号"
+                android:inputType="text" android:layout_marginBottom="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="密码" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="12dp">
+                <EditText android:id="@+id/etPassword" android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:layout_weight="1"
+                    android:hint="密码"
+                    android:inputType="textPassword" />
+                <ImageButton android:id="@+id/btnTogglePassword"
+                    android:layout_width="48dp" android:layout_height="48dp"
+                    android:src="@android:drawable/ic_secure"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="切换密码可见性" />
+            </LinearLayout>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="网址" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etUrl" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:hint="https://..."
+                android:inputType="textUri" android:layout_marginBottom="12dp"/>
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="备注" android:textColor="@color/text_secondary" android:textSize="12sp"
+                android:layout_marginBottom="4dp"/>
+            <EditText android:id="@+id/etAccountRemark" android:layout_width="match_parent"
+                android:layout_height="100dp" android:hint="备注信息"
+                android:gravity="top" android:inputType="textMultiLine"
+                android:layout_marginBottom="16dp"/>
+        </LinearLayout>
+
+        <!-- 保存按钮 -->
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="保存"
+            android:textSize="16sp"
+            android:backgroundTint="@color/primary"
+            android:textColor="@android:color/white"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+</ScrollView>
