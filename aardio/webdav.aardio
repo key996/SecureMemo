@@ -1,0 +1,149 @@
+// webdav.aardio - WebDAV 同步模块
+// 支持坚果云、Nextcloud 等标准 WebDAV 服务
+
+import inet.http;
+import crypt.bin;
+import string;
+
+namespace WebDav {
+
+    // 配置（从 INI 文件加载/保存）
+    var config = {
+        serverUrl = "";
+        username = "";
+        password = "";
+        remotePath = "/SecureMemo/vault.dat";
+    };
+
+    var CONFIG_FILE = io.fullpath("webdav.ini");
+
+    // ==================== 配置管理 ====================
+
+    function loadConfig() {
+        if (io.exist(CONFIG_FILE)) {
+            var ini = string.load(CONFIG_FILE);
+            // 简单 INI 解析
+            config.serverUrl  = string.match(ini, "serverUrl=([^\r\n]+)") || "";
+            config.username   = string.match(ini, "username=([^\r\n]+)") || "";
+            config.password   = string.match(ini, "password=([^\r\n]+)") || "";
+            config.remotePath = string.match(ini, "remotePath=([^\r\n]+)") || "/SecureMemo/vault.dat";
+        }
+        return config;
+    }
+
+    function saveConfig(serverUrl, username, password, remotePath) {
+        config.serverUrl  = serverUrl;
+        config.username   = username;
+        config.password   = password;
+        config.remotePath = remotePath || "/SecureMemo/vault.dat";
+
+        var ini = string.format(
+            "serverUrl=%s\r\nusername=%s\r\npassword=%s\r\nremotePath=%s\r\n",
+            config.serverUrl, config.username, config.password, config.remotePath
+        );
+        string.save(CONFIG_FILE, ini);
+    }
+
+    function isConfigured() {
+        return #config.serverUrl > 0 and #config.username > 0;
+    }
+
+    // ==================== Basic Auth 头 ====================
+
+    function buildBasicAuth(username, password) {
+        var credentials = username .. ":" .. password;
+        return "Basic " .. crypt.bin.encodeBase64(credentials);
+    }
+
+    // ==================== 上传（备份） ====================
+
+    function upload(localFilePath) {
+        if (!isConfigured()) {
+            error("WebDAV 未配置");
+        }
+
+        // 读取本地文件
+        var file = io.open(localFilePath, "rb");
+        if (!file) error("无法读取本地文件：" .. localFilePath);
+        var fileData = file.read("*a");
+        file.close();
+
+        // 构建上传 URL
+        var uploadUrl = buildUrl(config.serverUrl, config.remotePath);
+
+        // 先尝试创建远程目录
+        ensureRemoteDirectory();
+
+        // 发送 PUT 请求
+        var http = inet.http();
+        http.setHeader("Authorization", buildBasicAuth(config.username, config.password));
+        http.setHeader("Content-Type", "application/octet-stream");
+
+        var response, statusCode = http.put(uploadUrl, fileData);
+
+        if (statusCode != 200 and statusCode != 201 and statusCode != 204) {
+            error(string.format("上传失败，HTTP %d", statusCode));
+        }
+
+        return true;
+    }
+
+    // ==================== 下载（还原） ====================
+
+    function download(saveToPath) {
+        if (!isConfigured()) {
+            error("WebDAV 未配置");
+        }
+
+        var downloadUrl = buildUrl(config.serverUrl, config.remotePath);
+
+        var http = inet.http();
+        http.setHeader("Authorization", buildBasicAuth(config.username, config.password));
+
+        var response, statusCode = http.get(downloadUrl);
+
+        if (statusCode == 404) {
+            error("远程文件不存在，请先从 Android 端备份");
+        }
+        if (statusCode != 200) {
+            error(string.format("下载失败，HTTP %d", statusCode));
+        }
+
+        // 保存到本地
+        var file = io.open(saveToPath, "wb");
+        if (!file) error("无法写入本地文件：" .. saveToPath);
+        file.write(response);
+        file.close();
+
+        return true;
+    }
+
+    // ==================== 工具函数 ====================
+
+    function ensureRemoteDirectory() {
+        // 提取目录路径
+        var dirPath = string.match(config.remotePath, "^(.*)/[^/]+$");
+        if (!dirPath or #dirPath == 0) return;
+
+        var dirUrl = buildUrl(config.serverUrl, dirPath);
+        var http = inet.http();
+        http.setHeader("Authorization", buildBasicAuth(config.username, config.password));
+
+        // MKCOL 创建目录（忽略错误，目录可能已存在）
+        pcall(function() {
+            http.request("MKCOL", dirUrl, "");
+        });
+    }
+
+    function buildUrl(serverUrl, path) {
+        // 去掉末尾斜杠
+        if (string.right(serverUrl, 1) == "/") {
+            serverUrl = string.left(serverUrl, #serverUrl - 1);
+        }
+        // 确保路径以 / 开头
+        if (string.left(path, 1) != "/") {
+            path = "/" .. path;
+        }
+        return serverUrl .. path;
+    }
+}
