@@ -1,0 +1,69 @@
+// crypto.aardio - AES-256-GCM 加密/解密模块
+// 与 Android 端完全兼容：相同的 IV 格式、相同的 Base64 编码
+
+import crypt;
+import crypt.bin;
+
+namespace Crypto {
+
+    // ==================== SHA-256 哈希 ====================
+    // 用于从图案密码派生 AES 密钥（与 Android AesGcmCrypto.deriveKeyFromPattern 一致）
+    function deriveKey(patternPassword) {
+        // SHA-256 哈希，返回 32 字节原始数据
+        var hash = crypt.sha256(patternPassword, true); // true = 返回原始字节
+        return hash;
+    }
+
+    // 计算图案密码的 SHA-256 哈希（十六进制字符串，用于验证存储）
+    function hashPattern(patternPassword) {
+        return crypt.sha256(patternPassword); // 默认返回十六进制字符串
+    }
+
+    // ==================== AES-256-GCM 加密 ====================
+    // 输出格式：Base64(IV[12字节] + 密文 + GCM Tag[16字节])
+    // 与 Android AesGcmCrypto.encrypt 完全兼容
+    function encrypt(plainText, keyBytes) {
+        // 生成 12 字节随机 IV
+        var iv = crypt.randomBytes(12);
+
+        // AES-256-GCM 加密
+        // Aardio crypt 库支持 AES/GCM 模式
+        var cipher = crypt.aes(keyBytes, iv, "gcm");
+        var cipherText, tag = cipher.encrypt(plainText);
+
+        // 拼接：IV(12) + 密文 + Tag(16)
+        var combined = iv .. cipherText .. tag;
+
+        // Base64 编码（无换行，与 Android Base64.NO_WRAP 一致）
+        return crypt.bin.encodeBase64(combined);
+    }
+
+    // ==================== AES-256-GCM 解密 ====================
+    function decrypt(encryptedBase64, keyBytes) {
+        // Base64 解码
+        var combined = crypt.bin.decodeBase64(encryptedBase64);
+
+        if (#combined < 28) { // 12(IV) + 0(最小密文) + 16(Tag) = 28
+            error("数据格式错误：长度不足");
+        }
+
+        // 提取 IV（前 12 字节）
+        var iv = string.left(combined, 12);
+
+        // 提取 Tag（最后 16 字节）
+        var tag = string.right(combined, 16);
+
+        // 提取密文（中间部分）
+        var cipherText = string.sub(combined, 13, #combined - 16);
+
+        // AES-256-GCM 解密（同时验证 GCM Tag 完整性）
+        var cipher = crypt.aes(keyBytes, iv, "gcm");
+        var plainText = cipher.decrypt(cipherText, tag);
+
+        if (plainText == null) {
+            error("解密失败：密码错误或数据已损坏");
+        }
+
+        return plainText;
+    }
+}
